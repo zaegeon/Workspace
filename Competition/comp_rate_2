@@ -1,0 +1,583 @@
+# imports
+import numpy as np
+import pandas as pd
+import os
+import scipy.stats as stats
+from statsmodels.formula.api import ols
+from sklearn.model_selection import train_test_split
+from sklearn.linear_model import LinearRegression
+from sklearn.metrics import r2_score
+import matplotlib.pyplot as plt
+
+dir = 'C:/Users/입시플랫폼컨텐츠/Desktop/workspace/#경쟁률'
+os.chdir(dir)
+
+uni_2023 = pd.read_excel(dir + '/2023_uni.xlsx')
+
+# 분석대상 학과코드 추출
+seoul_uni = []
+uni_lst = ['서울대', '연세대', '고려대', '성균관대', '서강대', '한양대', '중앙대', '경희대',
+           '한국외대', '한국외대(글로벌)', '서울시립대']
+for i in uni_lst:
+    a = uni_2023[uni_2023['uni_name'] == i]['school_cd'].unique()[0]
+    seoul_uni.append(a)
+seoul_uni
+
+# 분석대상 DataFrame 생성
+uni_df = pd.DataFrame()
+for i in seoul_uni:
+    a = uni_2023[uni_2023['school_cd'] == i]
+    uni_df = pd.concat([uni_df, a])
+
+uni_df['uni_name'].unique()
+
+uni_df.info()
+
+uni_df["comp_2022"].isna().sum()
+
+uni_df_na_2_0 = uni_df["comp_2022"].fillna(0)
+
+print(f'2022학년도 경쟁률 평균 : {round(uni_df_na_2_0.mean(), 4)}'
+      f'\n2022학년도 경쟁률 분산 : {round(uni_df_na_2_0.var(), 4)}'
+      f'\n2022학년도 경쟁률 표준편차 : {round(uni_df_na_2_0.std(), 4)}')
+
+# 2022학년도 경쟁률이 없는 데이터행 제거
+uni_df = uni_df[uni_df["comp_2022"].notnull()]
+
+# 계열 별 경쟁률 통계량
+print(f'인문계열 수 : {(uni_df["line"] == "인문").sum()}, 자연계열 수 : {(uni_df["line"] == "자연").sum()}, '
+      f'공통계열 수 : {(uni_df["line"] == "공통").sum()}, 예체능계열 수 : {(uni_df["line"] == "예체능").sum()}')
+
+print(f'2022학년도 인문계열 경쟁률 평균 : {round(uni_df[uni_df["line"] == "인문"]["comp_2022"].mean(), 4)}'
+      f'\n2022학년도 인문계열 경쟁률 분산 : {round(uni_df[uni_df["line"] == "인문"]["comp_2022"].var(), 4)}'
+      f'\n2022학년도 인문계열 경쟁률 표준편차 : {round(uni_df[uni_df["line"] == "인문"]["comp_2022"].std(), 4)}')
+print('==========================================')
+print(f'2022학년도 자연계열 경쟁률 평균 : {round(uni_df[uni_df["line"] == "자연"]["comp_2022"].mean(), 4)}'
+      f'\n2022학년도 자연계열 경쟁률 분산 : {round(uni_df[uni_df["line"] == "자연"]["comp_2022"].var(), 4)}'
+      f'\n2022학년도 자연계열 경쟁률 표준편차 : {round(uni_df[uni_df["line"] == "자연"]["comp_2022"].std(), 4)}')
+print('==========================================')
+print(f'2022학년도 공통계열 경쟁률 평균 : {round(uni_df[uni_df["line"] == "공통"]["comp_2022"].mean(), 4)}'
+      f'\n2022학년도 공통계열 경쟁률 분산 : {round(uni_df[uni_df["line"] == "공통"]["comp_2022"].var(), 4)}'
+      f'\n2022학년도 공통계열 경쟁률 표준편차 : {round(uni_df[uni_df["line"] == "공통"]["comp_2022"].std(), 4)}')
+
+print(f'2022학년도 예체능계열 경쟁률 평균 : {round(uni_df[uni_df["line"] == "예체능"]["comp_2022"].mean(), 4)}'
+      f'\n2022학년도 예체능계열 경쟁률 분산 : {round(uni_df[uni_df["line"] == "예체능"]["comp_2022"].var(), 4)}'
+      f'\n2022학년도 예체능계열 경쟁률 표준편차 : {round(uni_df[uni_df["line"] == "예체능"]["comp_2022"].std(), 4)}')
+
+# 인문/자연 계열 구분
+uni_lib = uni_df[uni_df["line"] == "인문"]
+uni_sci = uni_df[uni_df["line"] == "자연"]
+
+# 인문계열 2022학년도 경쟁률과 자연계열 2022학년도 경쟁률 평균 차이 여부 확인
+tstats, p_val = stats.ttest_ind(uni_lib["comp_2022"].values, uni_sci["comp_2022"].values)
+print(f"T-statistics : {round(tstats, 4)}, P-value : {round(p_val, 4)}")
+
+# 인문/자연 경쟁률 분포 확인
+fig, axes = plt.subplots(2,1, figsize=(8,8))
+axes[0].hist(uni_lib["comp_2022"])
+axes[0].set_title('2022 Competition Rate - Liberal Arts')
+axes[0].set_xlim([0, 10])
+plt.subplots_adjust(hspace=0.5)
+axes[1].hist(uni_sci["comp_2022"])
+axes[1].set_title('2022 Competition Rate - Natural Science')
+axes[1].set_xlim([0, 10])
+plt.show()
+
+# 인문/자연 경쟁률 정규성 검정
+from scipy.stats import shapiro
+print(shapiro(uni_lib["comp_2022"]))
+print(shapiro(uni_sci["comp_2022"]))
+
+# 인문/자연 경쟁률 등분산성 검정 (H0 : 등분산성 만족)
+print(stats.bartlett(uni_lib['comp_2022'], uni_sci['comp_2022'])) # 정규성 만족 시 사용
+print(stats.levene(uni_lib['comp_2022'], uni_sci['comp_2022']))
+print(stats.fligner(uni_lib['comp_2022'], uni_sci['comp_2022'], center='mean'))
+
+# 인문/자연 경쟁률 T-Test (H0 : μ₁=μ₂)
+stats.mannwhitneyu(uni_lib['comp_2022'], uni_sci['comp_2022'])
+# stats.mannwhitneyu(round(uni_lib['comp_2022'] * uni_lib['num_2022'],0), round(uni_sci['comp_2022'] * uni_sci['num_2022'], 0))
+# 지원인원의 차이는 X
+# stats.mannwhitneyu(uni_lib['num_2022'], uni_sci['num_2022'])
+# 모집인원의 차이 X
+
+# MinMaxScaling 이후 결과 check.
+lib_comp = (uni_lib['comp_2022'] - uni_lib['comp_2022'].min()) / (uni_lib['comp_2022'].max() - uni_lib['comp_2022'].min())
+sci_comp = (uni_sci['comp_2022'] - uni_sci['comp_2022'].min()) / (uni_sci['comp_2022'].max() - uni_sci['comp_2022'].min())
+stats.mannwhitneyu(lib_comp, sci_comp)
+
+# 인문/자연 지원자 수
+print(f'총 지원자 수 : {int(round(uni_df["comp_2022"] * uni_df["num_2022"], 0).sum())}명, '
+      f'인문계열 지원자 수 : {int(round(uni_lib["comp_2022"] * uni_lib["num_2022"], 0).sum())}명, '
+      f'자연계열 지원자 수 : {int(round(uni_sci["comp_2022"] * uni_sci["num_2022"], 0).sum())}명')
+
+# last_comp : 직전 2시점 경쟁률 차이
+last_comp = pd.read_excel('last_comp.xlsx')
+
+last_comp = last_comp.drop(last_comp[last_comp['comp_2022'].isna()].index)
+last_comp = last_comp.reset_index()
+last_comp = last_comp.drop(columns='index')
+
+last_comp_lib = last_comp[last_comp['line'] == "인문"]
+last_comp_sci = last_comp[last_comp['line'] == "자연"]
+
+# 직전 2시점 경쟁률 차이 ~ 최종 경쟁률 산점도
+lin_reg_lib = LinearRegression()
+x_lib = last_comp_lib['last_comp_diff_2022'].values.reshape(-1, 1)
+y_lib = last_comp_lib['comp_2022'].values.reshape(-1, 1)
+lin_reg_lib.fit(x_lib, y_lib)
+lin_reg_lib.score(x_lib, y_lib)
+lib_b, lib_a = round(float(lin_reg_lib.intercept_), 4), round(float(lin_reg_lib.coef_), 4)
+
+lin_reg_sci = LinearRegression()
+x_sci = last_comp_sci['last_comp_diff_2022'].values.reshape(-1, 1)
+y_sci = last_comp_sci['comp_2022'].values.reshape(-1, 1)
+lin_reg_sci.fit(x_sci, y_sci)
+sci_b, sci_a = round(float(lin_reg_sci.intercept_), 4), round(float(lin_reg_sci.coef_), 4)
+
+plt.scatter(last_comp_lib['last_comp_diff_2022'], last_comp_lib['comp_2022'], color='r', label="liberal arts")
+plt.plot(x_lib, lib_b + lib_a * x_lib, color='r')
+plt.text(2, 8, f'y = {lib_a}x + {lib_b}')
+plt.text(2, 7, f'R² = {round(lin_reg_lib.score(x_lib, y_lib), 4)}')
+plt.scatter(last_comp_sci['last_comp_diff_2022'], last_comp_sci['comp_2022'], color='b', label="natural science")
+plt.plot(x_sci, sci_b + sci_a * x_sci, color='b')
+plt.text(1.5, 13, f'y = {sci_a}x + {sci_b}')
+plt.text(1.5, 12, f'R² = {round(lin_reg_sci.score(x_sci, y_sci), 4)}')
+plt.xlim([0, 4])
+plt.ylim([2, 15])
+plt.legend()
+plt.show()
+
+# 직전 2시점 지원자 수 차이 ~ 최종 지원자 수 산점도
+x1 = round(last_comp_lib['last_comp_diff_2022'] * last_comp_lib['num_2022'],0).astype(int)
+y1 = round(last_comp_lib['comp_2022'] * last_comp_lib['num_2022'],0).astype(int)
+x2 = round(last_comp_sci['last_comp_diff_2022'] * last_comp_sci['num_2022'],0).astype(int)
+y2 = round(last_comp_sci['comp_2022'] * last_comp_sci['num_2022'], 0).astype(int)
+
+x1 = x1.values.reshape(-1, 1)
+y1 = y1.values.reshape(-1, 1)
+x2 = x2.values.reshape(-1, 1)
+y2 = y2.values.reshape(-1, 1)
+
+lin_reg_lib = LinearRegression()
+lin_reg_lib.fit(x1, y1)
+lib_b2, lib_a2 = round(float(lin_reg_lib.intercept_),4), round(float(lin_reg_lib.coef_), 4)
+lin_reg_sci = LinearRegression()
+lin_reg_sci.fit(x2, y2)
+sci_b2, sci_a2 = round(float(lin_reg_sci.intercept_), 4), round(float(lin_reg_sci.coef_), 4)
+lib_a2, sci_a2 # 인문계열 회귀계수, 자연계열 회귀계수
+lib_b2, sci_b2 # 인문계열 회귀식 상수항, 자연계열 회귀식 상수항
+
+plt.scatter(x1, y1, color="r", label="liberal arts")
+plt.scatter(x2, y2, color="g", label="natural science")
+plt.plot(x1, lib_b2 + lib_a2 * x1, color="r")
+plt.text(300, 1000, f'y = {lib_a2}x + {lib_b2} (Liberal Arts)')
+plt.text(300, 900, f'R² = {round(lin_reg_lib.score(x1, y1), 4)}')
+plt.plot(x2, sci_b2 + sci_a2 * x2, color="g", alpha=0.4)
+plt.text(250, 1750, f'y = {sci_a2}x + {sci_b2} (Natural Science)')
+plt.text(250, 1650, f'R² = {round(lin_reg_sci.score(x1, y1), 4)}')
+plt.xlim([0, 500])
+plt.ylim([0, 2000])
+plt.legend()
+plt.show()
+
+# Fit_intercept = False (상수항 X)
+lin_reg_lib = LinearRegression(fit_intercept=False)
+lin_reg_lib.fit(x1, y1)
+lib_a3 = round(float(lin_reg_lib.coef_), 4)
+lin_reg_sci = LinearRegression(fit_intercept=False)
+lin_reg_sci.fit(x2, y2)
+sci_a3 = round(float(lin_reg_sci.coef_), 4)
+
+plt.scatter(x1, y1, color="r", label="liberal arts")
+plt.scatter(x2, y2, color="g", label="natural science")
+plt.plot(x1, lib_a3 * x1, color="r")
+plt.text(300, 1000, f'y = {lib_a3}x (Liberal Arts)')
+plt.text(300, 900, f'R² = {round(lin_reg_lib.score(x1, y1), 4)}')
+plt.plot(x2, sci_a3 * x2 , color="g", alpha=0.4)
+plt.text(250, 1750, f'y = {sci_a3}x(Natural Science)')
+plt.text(250, 1650, f'R² = {round(lin_reg_sci.score(x1, y1), 4)}')
+plt.xlim([0, 500])
+plt.ylim([0, 2000])
+plt.legend()
+plt.show()
+
+# 인문
+# 실제 경쟁률 ~ 예측 지원자 수 / 모집인원(예측 경쟁률)
+r2_score(last_comp_lib['comp_2022'], y1 / last_comp_lib['num_2022'].values.reshape(-1,1))
+# 실제 최종경쟁률 * 모집인원 (실제 지원인원) ~ 예측 최종 지원 인원
+r2_score(round((last_comp_lib['comp_2022'] * last_comp_lib['num_2022']),0), y1)
+
+# 자연
+# 실제 경쟁률 ~ 예측 지원자 수 / 모집인원(예측 경쟁률)
+r2_score(last_comp_sci['comp_2022'], y2 / last_comp_sci['num_2022'].values.reshape(-1,1))
+# 실제 최종경쟁률 * 모집인원 (실제 지원인원) ~ 예측 최종 지원 인원
+r2_score(round((last_comp_sci['comp_2022'] * last_comp_sci['num_2022']),0), y2)
+
+# 작년 경쟁률 영향 분석
+# 2021학년도 경쟁률이 없는 데이터행 제거
+uni_df = uni_df[uni_df["comp_2021"].notnull()]
+
+# 선형회귀식
+x1 = uni_df[uni_df["line"] == "인문"]["comp_2021"].values.reshape(-1,1)
+y1 = uni_df[uni_df["line"] == "인문"]["comp_2022"].values.reshape(-1,1)
+x2 = uni_df[uni_df["line"] == "자연"]["comp_2021"].values.reshape(-1,1)
+y2 = uni_df[uni_df["line"] == "자연"]["comp_2022"].values.reshape(-1,1)
+lin_reg_lib = LinearRegression()
+lin_reg_lib.fit(x1, y1)
+lin_reg_lib.score(x1, y1)
+lin_reg_sci = LinearRegression()
+lin_reg_sci.fit(x2, y2)
+lin_reg_sci.score(x2, y2)
+
+# Regression Line
+a1, b1 = lin_reg_lib.coef_, lin_reg_lib.intercept_
+a2, b2 = lin_reg_sci.coef_, lin_reg_sci.intercept_
+
+# Visualization
+plt.scatter(x1, y1, label="liberal arts", color="r")
+plt.scatter(x2, y2, label="natural science", color="g")
+plt.plot(x1, a1*x1 + b1, color="r")
+plt.plot(x2, a2*x2 + b2, color="g")
+plt.text(10, 7, f'y = {round(float(a1),4)}x + {round(float(b1), 4)}')
+plt.text(10, 6, f'R² = {round(float(lin_reg_lib.score(x1, y1)), 4)}')
+plt.text(10, 12, f'y = {round(float(a2),4)}x + {round(float(b2), 4)}')
+plt.text(10, 11, f'R² = {round(float(lin_reg_sci.score(x2, y2)), 4)}')
+plt.xlim([1, 15])
+plt.ylim([1, 15])
+plt.legend()
+plt.show()
+
+# 지원자 수로 분석
+uni_lib = uni_df[uni_df["line"] == "인문"]
+uni_sci = uni_df[uni_df["line"] == "자연"]
+x1 = round(uni_lib["comp_2021"] * uni_lib["num_2021"],0).astype(int).values.reshape(-1,1)
+y1 = round(uni_lib["comp_2022"] * uni_lib["num_2022"],0).astype(int).values.reshape(-1,1)
+x2 = round(uni_sci["comp_2021"] * uni_sci["num_2021"],0).astype(int).values.reshape(-1,1)
+y2 = round(uni_sci["comp_2022"] * uni_sci["num_2022"],0).astype(int).values.reshape(-1,1)
+
+lin_reg_lib = LinearRegression()
+lin_reg_lib.fit(x1, y1)
+lin_reg_lib.score(x1, y1)
+lin_reg_sci = LinearRegression()
+lin_reg_sci.fit(x2, y2)
+lin_reg_sci.score(x2, y2)
+
+a1, b1 = lin_reg_lib.coef_, lin_reg_lib.intercept_
+a2, b2 = lin_reg_sci.coef_, lin_reg_sci.intercept_
+
+plt.scatter(x1, y1, label="liberal arts", color="r")
+plt.plot(x1, x1*a1 + b1, color="r")
+plt.scatter(x2, y2, label="natural science", color="b")
+plt.plot(x2, x2*a2 + b2, color="b")
+plt.text(1500,200, f'y = {round(float(a1), 4)}x + {round(float(b1), 4)}')
+plt.text(1500,100, f'R²={round(float(lin_reg_lib.score(x1,y1)),4)}')
+plt.text(1500,1500, f'y = {round(float(a2), 4)}x + {round(float(b2), 4)}')
+plt.text(1500,1400, f'R²={round(float(lin_reg_sci.score(x2,y2)), 4)}')
+plt.legend()
+plt.show()
+
+# 인문계열 이상치 제거
+x_new = round(uni_lib["comp_2021"] * uni_lib["num_2021"],0).astype(int).values
+np.where(x_new == x_new.max())
+uni_lib.iloc[[116, 120, 121, 130, 137]]['ue_cd_2022'].astype(int).unique()
+uni_lib[uni_lib['ue_cd_2022'] == 112291101][['uni_name', 'class']]
+# 중앙대 상경계열의 경우, 2021학년도에 통합선발을 하여 모집인원이 많음 → 지원자 수가 많음 ∴ 제거 후 분석 시도
+uni_lib_new = uni_lib.drop(uni_lib[uni_lib['ue_cd_2022'] == 112291101].index)
+
+x1 = round(uni_lib_new["comp_2021"] * uni_lib_new["num_2021"],0).astype(int).values.reshape(-1,1)
+y1 = round(uni_lib_new["comp_2022"] * uni_lib_new["num_2022"],0).astype(int).values.reshape(-1,1)
+lin_reg_lib.fit(x1, y1)
+a1, b1 = lin_reg_lib.coef_, lin_reg_lib.intercept_
+
+# 자연계열 이상치 제거
+find_outlier = uni_sci[uni_sci["comp_2021"] * uni_sci["num_2021"] <= 450]
+find_outlier = find_outlier[find_outlier["comp_2021"] * find_outlier["num_2021"] >= 300]
+outlier_index = (find_outlier["comp_2022"] * find_outlier["num_2022"]).index
+uni_sci_new = uni_sci.drop(outlier_index)
+x2 = round(uni_sci_new["comp_2021"] * uni_sci_new["num_2021"],0).astype(int).values.reshape(-1,1)
+y2 = round(uni_sci_new["comp_2022"] * uni_sci_new["num_2022"],0).astype(int).values.reshape(-1,1)
+lin_reg_sci.fit(x2, y2)
+a2, b2 = lin_reg_sci.coef_, lin_reg_sci.intercept_
+
+plt.scatter(x1, y1, label="liberal arts", color="r")
+plt.plot(x1, x1*a1 + b1, color="r")
+plt.scatter(x2, y2, label="natural science", color="b")
+plt.plot(x2, x2*a2 + b2, color="b")
+plt.text(1000,800, f'y = {round(float(a1), 4)}x + {round(float(b1), 4)}')
+plt.text(1000,700, f'R²={round(float(lin_reg_lib.score(x1,y1)),4)}')
+plt.text(1000,2000, f'y = {round(float(a2), 4)}x + {round(float(b2), 4)}')
+plt.text(1000,1900, f'R²={round(float(lin_reg_sci.score(x2,y2)), 4)}')
+plt.legend()
+plt.show()
+
+# 이상치 제거 후 경쟁률로 재분석
+x1 = uni_lib_new["comp_2021"].values.reshape(-1,1)
+y1 = uni_lib_new["comp_2022"].values.reshape(-1,1)
+x2 = uni_sci_new["comp_2021"].values.reshape(-1,1)
+y2 = uni_sci_new["comp_2022"].values.reshape(-1,1)
+lin_reg_lib = LinearRegression()
+lin_reg_lib.fit(x1, y1)
+lin_reg_lib.score(x1, y1)
+lin_reg_sci = LinearRegression()
+lin_reg_sci.fit(x2, y2)
+lin_reg_sci.score(x2, y2)
+
+# Regression Line
+a1, b1 = lin_reg_lib.coef_, lin_reg_lib.intercept_
+a2, b2 = lin_reg_sci.coef_, lin_reg_sci.intercept_
+
+# Visualization
+plt.scatter(x1, y1, label="liberal arts", color="r")
+plt.scatter(x2, y2, label="natural science", color="g")
+plt.plot(x1, a1*x1 + b1, color="r")
+plt.plot(x2, a2*x2 + b2, color="g")
+plt.text(10, 7, f'y = {round(float(a1),4)}x + {round(float(b1), 4)}')
+plt.text(10, 6, f'R² = {round(float(lin_reg_lib.score(x1, y1)), 4)}')
+plt.text(10, 12, f'y = {round(float(a2),4)}x + {round(float(b2), 4)}')
+plt.text(10, 11, f'R² = {round(float(lin_reg_sci.score(x2, y2)), 4)}')
+plt.xlim([1, 15])
+plt.ylim([1, 15])
+plt.legend()
+plt.show()
+
+# T-test according to "change_gun"
+# 2022학년도, 2021학년도 군이 없는 경우 제외 (모집하지 않은 군 분석 제외)
+uni_lib_new = uni_lib[uni_lib["gun_2022"].notnull()]
+uni_lib_new = uni_lib_new[uni_lib["gun_2021"].notnull()]
+uni_sci_new = uni_sci[uni_sci["gun_2022"].notnull()]
+uni_sci_new = uni_sci_new[uni_sci_new["gun_2021"].notnull()]
+change_n_lib = uni_lib_new[uni_lib_new["gun_2022"] == uni_lib_new["gun_2021"]]
+change_y_lib = uni_lib_new[uni_lib_new["gun_2022"] != uni_lib_new["gun_2021"]]
+change_n_sci = uni_sci_new[uni_sci_new["gun_2022"] == uni_sci_new["gun_2021"]]
+change_y_sci = uni_sci_new[uni_sci_new["gun_2022"] != uni_sci_new["gun_2021"]]
+
+print(stats.ttest_ind(change_n_lib["comp_2022"], change_y_lib["comp_2022"]))
+print(stats.mannwhitneyu(change_n_lib["comp_2022"], change_y_lib["comp_2022"]))
+print(stats.ttest_ind(change_n_sci["comp_2022"], change_y_sci["comp_2022"]))
+print(stats.mannwhitneyu(change_n_sci["comp_2022"], change_y_sci["comp_2022"]))
+
+# 최초 2시점 지원자 수 차이 ~ 최종경쟁률
+uni_new_df = uni_df[uni_df["comp_d3_2022"].notnull()]
+uni_new_df = uni_new_df[uni_df["comp_d2_2022"].notnull()]
+uni_lib_new = uni_new_df[uni_new_df["line"] == "인문"]
+uni_sci_new = uni_new_df[uni_new_df["line"] == "자연"]
+
+x1 = round((uni_lib_new["comp_d2_2022"] - uni_lib_new["comp_d3_2022"]) * uni_lib_new["num_2022"],0).astype(int)
+x1 = x1.values.reshape(-1,1)
+y1 = round(uni_lib_new["comp_2022"] * uni_lib_new["num_2022"],0).astype(int)
+y1 = y1.values.reshape(-1,1)
+
+x2 = round((uni_sci_new["comp_d2_2022"] - uni_sci_new["comp_d3_2022"]) * uni_sci_new["num_2022"],0).astype(int)
+x2 = x2.values.reshape(-1,1)
+y2 = round(uni_sci_new["comp_2022"] * uni_sci_new["num_2022"],0).astype(int)
+y2 = y2.values.reshape(-1,1)
+
+lin_reg_lib = LinearRegression()
+lin_reg_lib.fit(x1, y1)
+a1, b1 = lin_reg_lib.coef_, lin_reg_lib.intercept_
+
+lin_reg_sci = LinearRegression()
+lin_reg_sci.fit(x2, y2)
+a2, b2 = lin_reg_sci.coef_, lin_reg_sci.intercept_
+
+plt.scatter(x1, y1, color="r", label="liberal arts")
+plt.plot(x1, a1*x1+b1, color="r")
+plt.scatter(x2, y2, color="g", label="natural science")
+plt.plot(x2, a2*x2+b2, color="g")
+plt.text(200, 2000, f'y = {round(float(a1), 4)}x + {round(float(b1), 4)}')
+plt.text(200, 1800, f'R²={round(float(lin_reg_lib.score(x1, y1)), 4)}')
+plt.text(100, 500, f'y = {round(float(a2), 4)}x + {round(float(b2), 4)}')
+plt.text(100, 300, f'R²={round(float(lin_reg_sci.score(x2, y2)), 4)}')
+plt.legend()
+plt.show()
+
+np.where(x2 >= 150)
+
+# 두 시점 차이 PCA
+comps = pd.DataFrame()
+comps[['ue_cd','uni_name','line', 'class']] = uni_df[['ue_cd', 'uni_name','line', 'class']]
+comps['num_2022'] = uni_df['num_2022'].astype(int)
+comps['1st_comp'] = uni_df['comp_d2_2022'] - uni_df['comp_d3_2022']
+comps['2nd_comp'] = uni_df['comp_d1_2022'] - uni_df['comp_d2_2022']
+comps['3rd_comp'] = uni_df['comp_d0_am_2022'] - uni_df['comp_d1_2022']
+comps['4th_comp'] = uni_df['comp_d0_pm_2022'] - uni_df['comp_d0_am_2022']
+comps['final_comp'] = uni_df['comp_2022']
+comps['last_year_comp'] = uni_df['comp_2021']
+comps['num_2021'] = uni_df['num_2021']
+comps = comps[comps['final_comp'].notnull()]
+
+comps = comps.fillna(0)
+
+comps_lib = comps[comps['line'] == "인문"]
+comps_sci = comps[comps['line'] == "자연"]
+
+# 인문계열 a1, b1 list
+a1_lst_lib = []
+b1_lst_lib = []
+scr_lib = []
+for i in range(1, 5):
+    lin_reg = LinearRegression()
+    lin_reg.fit(comps_lib[comps_lib.columns[4+i]].values.reshape(-1, 1), comps_lib['final_comp'].values.reshape(-1,1))
+    a1, b1 = lin_reg.coef_, lin_reg.intercept_
+    scr = lin_reg.score(comps_lib[comps_lib.columns[4+i]].values.reshape(-1, 1), comps_lib['final_comp'].values.reshape(-1,1))
+    a1_lst_lib.append(round(float(a1), 4))
+    b1_lst_lib.append(round(float(b1), 4))
+    scr_lib.append(round(float(scr), 4))
+
+# 자연계열 a1, b1 list
+a1_lst_sci = []
+b1_lst_sci = []
+scr_sci = []
+for i in range(1, 5):
+    lin_reg = LinearRegression()
+    lin_reg.fit(comps_sci[comps_sci.columns[4+i]].values.reshape(-1, 1), comps_sci['final_comp'].values.reshape(-1,1))
+    a1, b1 = lin_reg.coef_, lin_reg.intercept_
+    scr = lin_reg.score(comps_sci[comps_sci.columns[4+i]].values.reshape(-1, 1), comps_sci['final_comp'].values.reshape(-1,1))
+    a1_lst_sci.append(round(float(a1), 4))
+    b1_lst_sci.append(round(float(b1), 4))
+    scr_sci.append(round(float(scr), 4))
+
+f, axes = plt.subplots(2, 2, figsize=(10,10))
+axes[0][0].scatter(comps_lib['1st_comp'], comps_lib['final_comp'], color="r", label="liberal arts")
+axes[0][0].scatter(comps_sci['1st_comp'], comps_sci['final_comp'], color="g", label="natural science")
+axes[0][0].plot(comps_lib['1st_comp'], comps_lib['1st_comp'].values * a1_lst_lib[0] + b1_lst_lib[0], color="r")
+axes[0][0].plot(comps_sci['1st_comp'], comps_sci['1st_comp'].values * a1_lst_sci[0] + b1_lst_sci[0], color="g")
+axes[0][0].text(2,10, f'y = {a1_lst_lib[0]}x + {b1_lst_lib[0]}\nR²= {scr_lib[0]}')
+axes[0][0].text(2,30, f'y = {a1_lst_sci[0]}x + {b1_lst_sci[0]}\nR²= {scr_sci[0]}')
+axes[0][0].legend()
+axes[0][0].set_title('1st_comp')
+axes[0][1].scatter(comps_lib['2nd_comp'], comps_lib['final_comp'], color="r", label="liberal arts")
+axes[0][1].scatter(comps_sci['2nd_comp'], comps_sci['final_comp'], color="g", label="natural science")
+axes[0][1].plot(comps_lib['2nd_comp'], comps_lib['2nd_comp'].values * a1_lst_lib[1] + b1_lst_lib[1], color="r")
+axes[0][1].plot(comps_sci['2nd_comp'], comps_sci['2nd_comp'].values * a1_lst_sci[1] + b1_lst_sci[1], color="g")
+axes[0][1].text(2,10, f'y = {a1_lst_lib[1]}x + {b1_lst_lib[1]}\nR²= {scr_lib[1]}')
+axes[0][1].text(2.3,30, f'y = {a1_lst_sci[1]}x + {b1_lst_sci[1]}\nR²= {scr_sci[1]}')
+axes[0][1].legend()
+axes[0][1].set_title('2nd_comp')
+axes[1][0].scatter(comps_lib['3rd_comp'], comps_lib['final_comp'], color="r", label="liberal arts")
+axes[1][0].scatter(comps_sci['3rd_comp'], comps_sci['final_comp'], color="g", label="natural science")
+axes[1][0].plot(comps_lib['3rd_comp'], comps_lib['3rd_comp'].values * a1_lst_lib[2] + b1_lst_lib[2], color="r")
+axes[1][0].plot(comps_sci['3rd_comp'], comps_sci['3rd_comp'].values * a1_lst_sci[2] + b1_lst_sci[2], color="g")
+axes[1][0].text(4,10, f'y = {a1_lst_lib[2]}x + {b1_lst_lib[2]}\nR²= {scr_lib[2]}')
+axes[1][0].text(3,30, f'y = {a1_lst_sci[2]}x + {b1_lst_sci[2]}\nR²= {scr_sci[2]}')
+axes[1][0].legend()
+axes[1][0].set_title('3rd_comp')
+axes[1][1].scatter(comps_lib['4th_comp'], comps_lib['final_comp'], color="r", label="liberal arts")
+axes[1][1].scatter(comps_sci['4th_comp'], comps_sci['final_comp'], color="g", label="natural science")
+axes[1][1].plot(comps_lib['4th_comp'], comps_lib['4th_comp'].values * a1_lst_lib[3] + b1_lst_lib[3], color="r")
+axes[1][1].plot(comps_sci['4th_comp'], comps_sci['4th_comp'].values * a1_lst_sci[3] + b1_lst_sci[3], color="g")
+axes[1][1].text(4,10, f'y = {a1_lst_lib[3]}x + {b1_lst_lib[3]}\nR²= {scr_lib[3]}')
+axes[1][1].text(4,30, f'y = {a1_lst_sci[3]}x + {b1_lst_sci[3]}\nR²= {scr_sci[3]}')
+axes[1][1].legend()
+axes[1][1].set_title('4th_comp')
+plt.show()
+
+# 경쟁률 → "인원수"로 변경
+# 인문계열 a1, b1 list
+a1_lst_lib = []
+b1_lst_lib = []
+scr_lib = []
+
+for i in range(1, 5):
+    lin_reg = LinearRegression()
+    x1 = round(comps_lib[comps_lib.columns[4+i]] * comps_lib['num_2022'],0).values.astype(int)
+    x1 = x1.reshape(-1, 1)
+    y1 = round(comps_lib["final_comp"] * comps_lib["num_2022"], 0).values.astype(int)
+    y1 = y1.reshape(-1, 1)
+    lin_reg.fit(x1, y1)
+    a1, b1 = lin_reg.coef_, lin_reg.intercept_
+    scr = lin_reg.score(x1, y1)
+    a1_lst_lib.append(round(float(a1), 4))
+    b1_lst_lib.append(round(float(b1), 4))
+    scr_lib.append(round(float(scr), 4))
+
+# 자연계열 a1, b1 list
+a1_lst_sci = []
+b1_lst_sci = []
+scr_sci = []
+for i in range(1, 5):
+    lin_reg = LinearRegression()
+    x1 = round(comps_sci[comps_sci.columns[4+i]] * comps_sci['num_2022'], 0).values.astype(int)
+    x1 = x1.reshape(-1, 1)
+    y1 = round(comps_sci["final_comp"] * comps_sci["num_2022"], 0).values.astype(int)
+    y1 = y1.reshape(-1, 1)
+    lin_reg.fit(x1, y1)
+    a1, b1 = lin_reg.coef_, lin_reg.intercept_
+    scr = lin_reg.score(x1, y1)
+    a1_lst_sci.append(round(float(a1), 4))
+    b1_lst_sci.append(round(float(b1), 4))
+    scr_sci.append(round(float(scr), 4))
+
+f, axes = plt.subplots(2, 2, figsize=(10,10))
+axes[0][0].scatter(round(comps_lib['1st_comp'] * comps_lib['num_2022'],0),
+                   round(comps_lib['final_comp'] * comps_lib["num_2022"],0), color="r", label="liberal arts")
+axes[0][0].scatter(round(comps_sci['1st_comp'] * comps_sci["num_2022"],0),
+                   round(comps_sci['final_comp'] * comps_sci["num_2022"],0), color="g", label="natural science")
+axes[0][0].plot(round(comps_lib['1st_comp'] * comps_lib["num_2022"],0),
+                round(comps_lib['1st_comp'] * comps_lib["num_2022"],0).values * a1_lst_lib[0] + b1_lst_lib[0], color="r")
+axes[0][0].plot(round(comps_sci['1st_comp'] * comps_sci["num_2022"],0),
+                round(comps_sci['1st_comp'] * comps_sci["num_2022"],0).values * a1_lst_sci[0] + b1_lst_sci[0], color="g")
+axes[0][0].text(50,1000, f'y = {a1_lst_lib[0]}x + {b1_lst_lib[0]}\nR²= {scr_lib[0]}')
+axes[0][0].text(150,1200, f'y = {a1_lst_sci[0]}x + {b1_lst_sci[0]}\nR²= {scr_sci[0]}')
+axes[0][0].legend()
+axes[0][0].set_title('1st_comp')
+axes[0][1].scatter(round(comps_lib['2nd_comp'] * comps_lib['num_2022'],0),
+                   round(comps_lib['final_comp'] * comps_lib["num_2022"],0), color="r", label="liberal arts")
+axes[0][1].scatter(round(comps_sci['2nd_comp'] * comps_sci["num_2022"],0),
+                   round(comps_sci['final_comp'] * comps_sci["num_2022"],0), color="g", label="natural science")
+axes[0][1].plot(round(comps_lib['2nd_comp'] * comps_lib["num_2022"],0),
+                round(comps_lib['2nd_comp'] * comps_lib["num_2022"],0).values * a1_lst_lib[1] + b1_lst_lib[1], color="r")
+axes[0][1].plot(round(comps_sci['2nd_comp'] * comps_sci["num_2022"],0),
+                round(comps_sci['2nd_comp'] * comps_sci["num_2022"],0).values * a1_lst_sci[1] + b1_lst_sci[1], color="g")
+axes[0][1].text(50,1000, f'y = {a1_lst_lib[1]}x + {b1_lst_lib[1]}\nR²= {scr_lib[1]}')
+axes[0][1].text(200,1500, f'y = {a1_lst_sci[1]}x + {b1_lst_sci[1]}\nR²= {scr_sci[1]}')
+axes[0][1].legend()
+axes[0][1].set_title('2nd_comp')
+axes[1][0].scatter(round(comps_lib['3rd_comp'] * comps_lib['num_2022'],0),
+                   round(comps_lib['final_comp'] * comps_lib["num_2022"],0), color="r", label="liberal arts")
+axes[1][0].scatter(round(comps_sci['3rd_comp'] * comps_sci["num_2022"],0),
+                   round(comps_sci['final_comp'] * comps_sci["num_2022"],0), color="g", label="natural science")
+axes[1][0].plot(round(comps_lib['3rd_comp'] * comps_lib["num_2022"],0),
+                round(comps_lib['3rd_comp'] * comps_lib["num_2022"],0).values * a1_lst_lib[2] + b1_lst_lib[2], color="r")
+axes[1][0].plot(round(comps_sci['3rd_comp'] * comps_sci["num_2022"],0),
+                round(comps_sci['3rd_comp'] * comps_sci["num_2022"],0).values * a1_lst_sci[2] + b1_lst_sci[2], color="g")
+axes[1][0].text(100,1200, f'y = {a1_lst_lib[2]}x + {b1_lst_lib[2]}\nR²= {scr_lib[2]}')
+axes[1][0].text(300,1000, f'y = {a1_lst_sci[2]}x + {b1_lst_sci[2]}\nR²= {scr_sci[2]}')
+axes[1][0].legend()
+axes[1][0].set_title('3rd_comp')
+axes[1][1].scatter(round(comps_lib['4th_comp'] * comps_lib['num_2022'],0),
+                   round(comps_lib['final_comp'] * comps_lib["num_2022"],0), color="r", label="liberal arts")
+axes[1][1].scatter(round(comps_sci['4th_comp'] * comps_sci["num_2022"],0),
+                   round(comps_sci['final_comp'] * comps_sci["num_2022"],0), color="g", label="natural science")
+axes[1][1].plot(round(comps_lib['4th_comp'] * comps_lib["num_2022"],0),
+                round(comps_lib['4th_comp'] * comps_lib["num_2022"],0).values * a1_lst_lib[3] + b1_lst_lib[3], color="r")
+axes[1][1].plot(round(comps_sci['4th_comp'] * comps_sci["num_2022"],0),
+                round(comps_sci['4th_comp'] * comps_sci["num_2022"],0).values * a1_lst_sci[3] + b1_lst_sci[3], color="g")
+axes[1][1].text(100,1000, f'y = {a1_lst_lib[3]}x + {b1_lst_lib[3]}\nR²= {scr_lib[3]}')
+axes[1][1].text(300,1400, f'y = {a1_lst_sci[3]}x + {b1_lst_sci[3]}\nR²= {scr_sci[3]}')
+axes[1][1].legend()
+axes[1][1].set_title('4th_comp')
+plt.show()
+
+# PCA
+from sklearn import decomposition
+pca = decomposition.PCA()
+dt_lib = pd.DataFrame()
+dt_lib['last_year_comp'] = round(comps_lib['last_year_comp'] * comps_lib['num_2021'], 0).astype(int)
+dt_lib['1st_comp'] = round(comps_lib['1st_comp'] * comps_lib['num_2022'],0).astype(int)
+dt_lib['2nd_comp'] = round(comps_lib['2nd_comp'] * comps_lib['num_2022'],0).astype(int)
+dt_lib['3rd_comp'] = round(comps_lib['3rd_comp'] * comps_lib['num_2022'],0).astype(int)
+dt_lib['4th_comp'] = round(comps_lib['4th_comp'] * comps_lib['num_2022'],0).astype(int)
+dt_lib['final_comp'] = round(comps_lib['final_comp'] * comps_lib['num_2022'],0).astype(int)
+PCA = pca.fit_transform(dt_lib)
+print(np.cumsum(pca.explained_variance_ratio_))
+
+dt_sci = pd.DataFrame()
+dt_sci['last_year_comp'] = round(comps_sci['last_year_comp'] * comps_sci['num_2021'], 0).astype(int)
+dt_sci['1st_comp'] = round(comps_sci['1st_comp'] * comps_sci['num_2022'],0).astype(int)
+dt_sci['2nd_comp'] = round(comps_sci['2nd_comp'] * comps_sci['num_2022'],0).astype(int)
+dt_sci['3rd_comp'] = round(comps_sci['3rd_comp'] * comps_sci['num_2022'],0).astype(int)
+dt_sci['4th_comp'] = round(comps_sci['4th_comp'] * comps_sci['num_2022'],0).astype(int)
+dt_sci['final_comp'] = round(comps_sci['final_comp'] * comps_sci['num_2022'],0).astype(int)
+PCA2 = pca.fit_transform(dt_sci)
+print(np.cumsum(pca.explained_variance_ratio_))
