@@ -1,0 +1,223 @@
+# imports
+import numpy as np
+import pandas as pd
+import os
+import scipy.stats as stats
+from statsmodels.formula.api import ols
+from sklearn.model_selection import train_test_split
+from sklearn.linear_model import LinearRegression
+from sklearn.metrics import r2_score
+import matplotlib.pyplot as plt
+import seaborn as sns
+
+dir = 'C:/Users/입시플랫폼컨텐츠/Desktop/workspace/#경쟁률'
+os.chdir(dir)
+
+uni_2023 = pd.read_excel(dir + '/2023_uni.xlsx')
+
+# 분석대상 학과코드 추출
+seoul_uni = []
+uni_lst = ['서울대', '연세대', '고려대', '서강대', '성균관대', '한양대', '중앙대', '경희대', '한국외대', '한국외대(글로벌)', '서울시립대']
+for i in uni_lst:
+    a = uni_2023[uni_2023['uni_name'] == i]['school_cd'].unique()[0]
+    seoul_uni.append(a)
+seoul_uni
+
+# 분석대상 DataFrame 생성
+uni_df = pd.DataFrame()
+for i in seoul_uni:
+    a = uni_2023[uni_2023['school_cd'] == i]
+    uni_df = pd.concat([uni_df, a])
+
+uni_df2 = uni_df[uni_df["comp_2022"].notnull()]
+uni_df2 = uni_df2[uni_df2["comp_2021"].notnull()]
+
+uni_df2["comp_2022"]
+
+# 시점 별 지원자 수 차이 excel 불러오기
+comp = pd.read_excel("comp.xlsx")
+comp = comp[comp["last_comp"].notnull()]
+comp = comp[comp["last_year_comp"].notnull()]
+comp = comp.drop(comp[comp["uni_name"] == "중앙대"].index)
+comp = comp.drop(comp[comp["uni_name"] == "성균관대"].index)
+
+comp_lib = comp[comp["line"] == "인문"]
+comp_sci = comp[comp["line"] == "자연"]
+
+# PCA
+from sklearn import decomposition
+pca = decomposition.PCA()
+dt_lib = pd.DataFrame()
+dt_sci = pd.DataFrame()
+dt_lib[["last_year_comp", "1st_comp", "2nd_comp", "3rd_comp", "4th_comp", "last_comp"]] = \
+    comp_lib[["last_year_comp", "1st_comp", "2nd_comp", "3rd_comp", "4th_comp", "last_comp"]]
+dt_sci[["last_year_comp", "1st_comp", "2nd_comp", "3rd_comp", "4th_comp", "last_comp"]] = \
+    comp_sci[["last_year_comp", "1st_comp", "2nd_comp", "3rd_comp", "4th_comp", "last_comp"]]
+
+PCA_lib = pca.fit_transform(dt_lib)
+print(np.cumsum(pca.explained_variance_ratio_))
+PCA_sci = pca.fit_transform(dt_sci)
+print(np.cumsum(pca.explained_variance_ratio_))
+
+# 인문계열 a1, b1 list
+a1_lst_lib = []
+b1_lst_lib = []
+scr_lib = []
+
+for i in range(1, 5):
+    lin_reg = LinearRegression()
+    x1 = dt_lib[dt_lib.columns[i]].values.astype(int)
+    x1 = x1.reshape(-1, 1)
+    y1 = dt_lib["last_comp"].values.astype(int)
+    y1 = y1.reshape(-1, 1)
+    lin_reg.fit(x1, y1)
+    a1, b1 = lin_reg.coef_, lin_reg.intercept_
+    scr = lin_reg.score(x1, y1)
+    a1_lst_lib.append(round(float(a1), 4))
+    b1_lst_lib.append(round(float(b1), 4))
+    scr_lib.append(round(float(scr), 4))
+
+# 자연계열 a1, b1 list
+a1_lst_sci = []
+b1_lst_sci = []
+scr_sci = []
+
+for i in range(1, 5):
+    lin_reg = LinearRegression()
+    x1 = dt_sci[dt_sci.columns[i]].values.astype(int)
+    x1 = x1.reshape(-1, 1)
+    y1 = dt_sci["last_comp"].values.astype(int)
+    y1 = y1.reshape(-1, 1)
+    lin_reg.fit(x1, y1)
+    a1, b1 = lin_reg.coef_, lin_reg.intercept_
+    scr = lin_reg.score(x1, y1)
+    a1_lst_sci.append(round(float(a1), 4))
+    b1_lst_sci.append(round(float(b1), 4))
+    scr_sci.append(round(float(scr), 4))
+
+f, axes = plt.subplots(2, 2, figsize=(10,10))
+axes[0][0].scatter(dt_lib["1st_comp"], dt_lib["last_comp"], color="r", label="liberal arts")
+axes[0][0].scatter(dt_sci["1st_comp"], dt_sci["last_comp"], color="b", label="natural science")
+axes[0][0].plot(dt_lib["1st_comp"], dt_lib["1st_comp"] * a1_lst_lib[0] + b1_lst_lib[0], color="r")
+axes[0][0].plot(dt_sci["1st_comp"], dt_sci["1st_comp"] * a1_lst_sci[0] + b1_lst_sci[0], color="b")
+axes[0][0].text(60, 1000, f'y = {a1_lst_lib[0]}x + {b1_lst_lib[0]}\nR² = {scr_lib[0]}')
+axes[0][0].text(60, 200, f'y = {a1_lst_sci[0]}x + {b1_lst_sci[0]}\nR² = {scr_sci[0]}')
+axes[0][0].legend()
+axes[0][0].set_title("1st_comp")
+axes[0][1].scatter(dt_lib["2nd_comp"], dt_lib["last_comp"], color="r", label="liberal arts")
+axes[0][1].scatter(dt_sci["2nd_comp"], dt_sci["last_comp"], color="b", label="natural science")
+axes[0][1].plot(dt_lib["2nd_comp"], dt_lib["2nd_comp"] * a1_lst_lib[1] + b1_lst_lib[1], color="r")
+axes[0][1].plot(dt_sci["2nd_comp"], dt_sci["2nd_comp"] * a1_lst_sci[1] + b1_lst_sci[1], color="b")
+axes[0][1].text(60, 1000, f'y = {a1_lst_lib[1]}x + {b1_lst_lib[1]}\nR² = {scr_lib[1]}')
+axes[0][1].text(60, 200, f'y = {a1_lst_sci[1]}x + {b1_lst_sci[1]}\nR² = {scr_sci[1]}')
+axes[0][1].legend()
+axes[0][1].set_title("2nd_comp")
+axes[1][0].scatter(dt_lib["3rd_comp"], dt_lib["last_comp"], color="r", label="liberal arts")
+axes[1][0].scatter(dt_sci["3rd_comp"], dt_sci["last_comp"], color="b", label="natural science")
+axes[1][0].plot(dt_lib["3rd_comp"], dt_lib["3rd_comp"] * a1_lst_lib[2] + b1_lst_lib[2], color="r")
+axes[1][0].plot(dt_sci["3rd_comp"], dt_sci["3rd_comp"] * a1_lst_sci[2] + b1_lst_sci[2], color="b")
+axes[1][0].text(60, 1000, f'y = {a1_lst_lib[2]}x + {b1_lst_lib[2]}\nR² = {scr_lib[2]}')
+axes[1][0].text(60, 200, f'y = {a1_lst_sci[2]}x + {b1_lst_sci[2]}\nR² = {scr_sci[2]}')
+axes[1][0].legend()
+axes[1][0].set_title("3rd_comp")
+axes[1][1].scatter(dt_lib["4th_comp"], dt_lib["last_comp"], color="r", label="liberal arts")
+axes[1][1].scatter(dt_sci["4th_comp"], dt_sci["last_comp"], color="b", label="natural science")
+axes[1][1].plot(dt_lib["4th_comp"], dt_lib["4th_comp"] * a1_lst_lib[3] + b1_lst_lib[3], color="r")
+axes[1][1].plot(dt_sci["4th_comp"], dt_sci["4th_comp"] * a1_lst_sci[3] + b1_lst_sci[3], color="b")
+axes[1][1].text(60, 1000, f'y = {a1_lst_lib[3]}x + {b1_lst_lib[3]}\nR² = {scr_lib[3]}')
+axes[1][1].text(60, 200, f'y = {a1_lst_sci[3]}x + {b1_lst_sci[3]}\nR² = {scr_sci[3]}')
+axes[1][1].legend()
+axes[1][1].set_title("4th_comp")
+plt.show()
+
+# 인문계열 중 수학 반영비율 33% 초과 학과들 코드
+math33_lst = [112291072,112291071,112291101,112291069,112161005,112161006,112161009,112161010,112161007,112161011,
+              112161008,111021004,111021007,111021008,111021009,111021010,111021011,111021012,111021013,111021014,
+              111021113,111021015,111021006,111021016,111021017,111021018,111021003,111021020,111021021,111021022,
+              111021023,112211014,112211015,112211002,112211017,112211018,112211019,112211020,112211001,112211016,
+              112211003,112291070,112291100,112291080,112291099,112291073,112351097,112351098,112351082,112351083,
+              112071003,112071004,112071005,112071006,112071007,112071008,112071035,112071010,112071011,112071012,
+              112071013,112071014,112071015,112071016,112071017,112071018,112071019,112071020,112071021,112071022,
+              112071023,112071024,112071025,112071026,112071027,112071028,112071029,112071030,112071031,112071032,
+              112071033,112071034,112061010,112061012,112061013,112061014,112061016,112061020,112061009,112061018,
+              112061023,112061024,112061026,112061029,112061030,112061064,112061028,111031044,111031014,111031021]
+
+# DataFrame 생성
+math33_df = pd.DataFrame()
+for i in math33_lst:
+    a = uni_df[uni_df['ue_cd_2022'] == i]
+    math33_df = pd.concat([math33_df, a], axis=0)
+
+uni_lib = uni_df[uni_df["line"] == "인문"]
+uni_sci = uni_df[uni_df["line"] == "자연"]
+
+# 차집합 생성(수학 반영 비율 33% 이하)
+not_math33 = pd.merge(uni_lib, math33_df, how='outer', indicator=True).query('_merge == "left_only"')\
+    .drop(columns=['_merge'])
+
+print(f'Math percent 33% over class - count : {math33_df["comp_2022"].count()}')
+print(f'Math percent 33% over class - competition rate(2022) mean : {round(math33_df["comp_2022"].mean(),4)}')
+print(f'Math percent 33% over class - competition rate(2022) variance : {round(math33_df["comp_2022"].var(),4)}')
+print(f'Math percent 33% over class - competition rate(2022) standard deviation : '
+      f'{round(math33_df["comp_2022"].std(),4)}')
+print("====================================================================================")
+print(f'Liberal Arts total - count : {uni_lib["comp_2022"].count()}')
+print(f'Liberal Arts total - competition rate(2022) mean : {round(uni_lib["comp_2022"].mean(), 4)}')
+print(f'Liberal Arts total - competition rate(2022) variance : {round(uni_lib["comp_2022"].var(), 4)}')
+print(f'Liberal Arts total - competition rate(2022) standard deviation : {round(uni_lib["comp_2022"].std(), 4)}')
+print("====================================================================================")
+print(f'Math percent 33% under class - count : {not_math33["comp_2022"].count()}')
+print(f'Math percent 33% under class - competition rate(2022) mean : {round(not_math33["comp_2022"].mean(),4)}')
+print(f'Math percent 33% under class - competition rate(2022) variance : {round(not_math33["comp_2022"].var(),4)}')
+print(f'Math percent 33% under class - competition rate(2022) standard deviation : '
+      f'{round(not_math33["comp_2022"].std(),4)}')
+
+stats.mannwhitneyu(not_math33["comp_2022"].dropna(), math33_df["comp_2022"])
+not_math33 = not_math33[not_math33["comp_2022"].notnull()]
+stats.mannwhitneyu(not_math33["comp_2022"] * not_math33["num_2022"], math33_df["comp_2022"] * math33_df["num_2022"])
+
+# 자연계열 중 탐구 반영비율 33% 초과 학과들 코드
+sci33_lst = [112212027,112212005,112212006,112212007,112212022,112212003,112212023,112212025,112212026,112212004,
+             112212024,112292042,112292041,112292071,112292044,112292040,112292043,112292039,112292070,112292102,
+             112292048,112292101,112292083,112292072,112292087,112212028,112352080,112352111,112352112,112352113,
+             112352114,112352115,112352116,112352117,112352089,112352118,112352119,112352120,112352121,112352122,
+             112352123,112352079,112352124,112352125,112352078,112352085,112352086,112352087,112352088,112352090,
+             112352091,112352093]
+
+sci33_df = pd.DataFrame()
+for i in sci33_lst:
+    a = uni_sci[uni_sci["ue_cd_2022"] == i]
+    sci33_df = pd.concat([sci33_df, a], axis=0)
+
+# 차집합 생성(탐구 반영 비율 33% 이하)
+not_sci33 = pd.merge(uni_sci, sci33_df, how='outer', indicator=True).query('_merge == "left_only"')\
+    .drop(columns=['_merge'])
+
+print(f'Science percent 33% over class - count : {sci33_df["comp_2022"].count()}')
+print(f'Science percent 33% over class - competition rate(2022) mean : {round(sci33_df["comp_2022"].mean(),4)}')
+print(f'Science percent 33% over class - competition rate(2022) variance : {round(sci33_df["comp_2022"].var(),4)}')
+print(f'Science percent 33% over class - competition rate(2022) standard deviation : '
+      f'{round(sci33_df["comp_2022"].std(),4)}')
+print("====================================================================================")
+print(f'Natural Science total - count : {uni_sci["comp_2022"].count()}')
+print(f'Natural Science total - competition rate(2022) mean : {round(uni_sci["comp_2022"].mean(), 4)}')
+print(f'Natural Science total - competition rate(2022) variance : {round(uni_sci["comp_2022"].var(), 4)}')
+print(f'Natural Science total - competition rate(2022) standard deviation : {round(uni_sci["comp_2022"].std(), 4)}')
+print("====================================================================================")
+print(f'Science percent 33% under class - count : {not_sci33["comp_2022"].count()}')
+print(f'Science percent 33% under class - competition rate(2022) mean : {round(not_sci33["comp_2022"].mean(),4)}')
+print(f'Science percent 33% under class - competition rate(2022) variance : {round(not_sci33["comp_2022"].var(),4)}')
+print(f'Science percent 33% under class - competition rate(2022) standard deviation : '
+      f'{round(not_sci33["comp_2022"].std(),4)}')
+
+stats.mannwhitneyu(sci33_df["comp_2022"], not_sci33["comp_2022"].dropna())
+
+# 경쟁률이 상당히 큰 두 학과 제외 (중앙대 소프트웨어학부, 중앙대 창의ICT공과대학)
+sci33_df_new = sci33_df.drop(sci33_df[sci33_df["ue_cd_2022"] == 112292072].index)
+sci33_df_new = sci33_df_new.drop(sci33_df_new[sci33_df_new["ue_cd_2022"] == 112292087].index)
+print(f'Science percent 33% over class - count : {sci33_df_new["comp_2022"].count()}')
+print(f'Science percent 33% over class - competition rate(2022) mean : {round(sci33_df_new["comp_2022"].mean(),4)}')
+print(f'Science percent 33% over class - competition rate(2022) variance : {round(sci33_df_new["comp_2022"].var(),4)}')
+print(f'Science percent 33% over class - competition rate(2022) standard deviation : '
+      f'{round(sci33_df_new["comp_2022"].std(),4)}')
+stats.mannwhitneyu(sci33_df_new["comp_2022"], not_sci33["comp_2022"].dropna())
